@@ -22,6 +22,24 @@ export function NavBar() {
           >
             Dashboard
           </Link>
+          <Link
+            href="/tools/stt"
+            className="text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+          >
+            Speech-to-Text
+          </Link>
+          <Link
+            href="/tools/cv"
+            className="text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+          >
+            Computer Vision
+          </Link>
+          <Link
+            href="/history"
+            className="text-sm text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+          >
+            History
+          </Link>
         </nav>
         <UserBadge />
       </div>
