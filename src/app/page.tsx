@@ -39,7 +39,7 @@ export default function DashboardPage() {
             Computer Vision / SAM
           </h2>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Segment objects, analyse scene content, or extract colour palettes
+            Segment objects, analyze scene content, or extract colour palettes
             from images using SAM.
           </p>
         </Link>
