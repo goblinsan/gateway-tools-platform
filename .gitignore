@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# runtime data (per-user storage – mounted as a volume in production)
+/data
+
 # debug
 npm-debug.log*
 yarn-debug.log*
