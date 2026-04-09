@@ -111,8 +111,8 @@ policy, and privacy boundaries.
 
 ## Blue/green deploy contract
 
-See [docs/deploy-contract.md](docs/deploy-contract.md) (to be added) for the
-full contract expected by `gateway-control-plane`.
+See [docs/deploy-contract.md](docs/deploy-contract.md) for the full contract
+expected by `gateway-control-plane`.
 
 | Property | Value |
 |----------|-------|
@@ -121,3 +121,21 @@ full contract expected by `gateway-control-plane`.
 | Health endpoint | `GET /api/health` → HTTP 200 |
 | Env file | `.env.local` (mounted by operator) |
 | Durable storage | `./data` host directory mounted at `/data` (see [docs/storage.md](docs/storage.md)) |
+
+---
+
+## Upstream services
+
+The platform proxies requests to two internal services configured via
+environment variables.  See
+[docs/upstream-services.md](docs/upstream-services.md) for request/response
+contracts, supported formats, and timeout expectations.
+
+---
+
+## Operator runbook
+
+Step-by-step instructions for registering the app in `gateway-control-plane`,
+wiring Cloudflare Access at the reverse proxy, provisioning durable storage,
+and performing blue/green deploys are in
+[docs/operator-runbook.md](docs/operator-runbook.md).
