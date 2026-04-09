@@ -98,6 +98,17 @@ health-check and by the gateway-control-plane before traffic is cut over.
 
 ---
 
+## Storage
+
+Per-user artifacts and session metadata are stored under a durable data root
+(default `/data`, configurable via `DATA_ROOT`).  Each user's files are
+isolated in a subdirectory named by the derived user ID.
+
+See [docs/storage.md](docs/storage.md) for the full workspace layout, retention
+policy, and privacy boundaries.
+
+---
+
 ## Blue/green deploy contract
 
 See [docs/deploy-contract.md](docs/deploy-contract.md) (to be added) for the
@@ -109,4 +120,4 @@ full contract expected by `gateway-control-plane`.
 | Published port (green) | `3001` |
 | Health endpoint | `GET /api/health` → HTTP 200 |
 | Env file | `.env.local` (mounted by operator) |
-| Durable storage | None in phase-1; see future issues |
+| Durable storage | `./data` host directory mounted at `/data` (see [docs/storage.md](docs/storage.md)) |
