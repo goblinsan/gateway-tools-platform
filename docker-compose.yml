@@ -17,9 +17,9 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - .env.local
+      - ${APP_ENV_FILE:-.env.local}
     volumes:
-      - ./data:/data
+      - ${DATA_ROOT_HOST:-./data}:/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
@@ -37,7 +37,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/data
+      - ${DATA_ROOT_HOST:-./data}:/data
 
   # ── Green slot (standby / next version) ─────────────────────────────────────
   green:
@@ -48,4 +48,4 @@ services:
     ports:
       - "3001:3000"
     volumes:
-      - ./data:/data
+      - ${DATA_ROOT_HOST:-./data}:/data

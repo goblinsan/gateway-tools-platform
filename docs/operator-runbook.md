@@ -46,6 +46,8 @@ Minimum required values for production:
 ```
 STT_SERVICE_URL=http://<stt-host>:<port>
 CV_SERVICE_URL=http://<cv-host>:<port>
+DATA_ROOT=/data
+DATA_ROOT_HOST=/var/lib/gateway-tools/data
 ```
 
 Do **not** set `CF_ACCESS_DEV_EMAIL` in production.
@@ -118,16 +120,29 @@ Pick a persistent host path that survives reboots:
 mkdir -p /var/lib/gateway-tools/data
 ```
 
-Update `docker-compose.yml` (or set `DATA_ROOT` in `.env.local`) to point the
-container at this path:
+Set `DATA_ROOT_HOST` in `.env.local` so docker compose mounts the persistent
+host path into the container:
 
 ```yaml
 volumes:
-  - /var/lib/gateway-tools/data:/data
+  - ${DATA_ROOT_HOST:-./data}:/data
 ```
 
 Both blue and green slots must mount the **same host path** so that session
 data is available regardless of which slot is active.
+
+For gateway-control-plane managed blue/green deploys, keep the env file and
+data path outside the slot checkout:
+
+```bash
+mkdir -p /srv/apps/gateway-tools-platform/shared/data
+cat >/srv/apps/gateway-tools-platform/shared/.env.local <<'EOF'
+STT_SERVICE_URL=http://<stt-host>:<port>
+CV_SERVICE_URL=http://<cv-host>:<port>
+DATA_ROOT=/data
+DATA_ROOT_HOST=/srv/apps/gateway-tools-platform/shared/data
+EOF
+```
 
 ---
 

@@ -47,12 +47,12 @@ healthcheck:
 
 ## Environment file
 
-The operator must supply a `.env.local` file in the working directory before
-starting the container.  Docker Compose loads it automatically via:
+The operator must supply an env file before starting the container. Docker
+Compose loads it via:
 
 ```yaml
 env_file:
-  - .env.local
+  - ${APP_ENV_FILE:-.env.local}
 ```
 
 See `.env.example` for the full list of recognised variables.  The minimum
@@ -84,11 +84,16 @@ that data survives container restarts and blue/green slot swaps.
 
 ```yaml
 volumes:
-  - /path/on/host/gateway-tools-data:/data
+  - ${DATA_ROOT_HOST:-./data}:/data
 ```
 
 Both the blue and green containers must share the same host path so that
 in-flight sessions remain accessible after a slot swap.
+
+For managed gateway deploys, the recommended values are:
+
+- `APP_ENV_FILE=/srv/apps/gateway-tools-platform/shared/.env.local`
+- `DATA_ROOT_HOST=/srv/apps/gateway-tools-platform/shared/data`
 
 See [storage.md](storage.md) for the full workspace layout and retention
 guidance.
@@ -142,8 +147,8 @@ container runs as a non-root `nextjs` user (UID 1001).
 | Published port (blue)  | `3000`                                            |
 | Published port (green) | `3001`                                            |
 | Health endpoint        | `GET /api/health` → HTTP 200                      |
-| Env file               | `.env.local` (mounted/provided by operator)       |
-| Durable storage mount  | Host path → `/data` inside container              |
+| Env file               | `${APP_ENV_FILE:-.env.local}`                     |
+| Durable storage mount  | `${DATA_ROOT_HOST:-./data}` → `/data`             |
 | Image                  | `gateway-tools-platform:latest`                   |
 | Container user         | `nextjs` (UID 1001, non-root)                     |
 | Node version           | 20 (Alpine)                                       |

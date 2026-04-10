@@ -119,8 +119,8 @@ expected by `gateway-control-plane`.
 | Published port (blue) | `3000` |
 | Published port (green) | `3001` |
 | Health endpoint | `GET /api/health` → HTTP 200 |
-| Env file | `.env.local` (mounted by operator) |
-| Durable storage | `./data` host directory mounted at `/data` (see [docs/storage.md](docs/storage.md)) |
+| Env file | `${APP_ENV_FILE:-.env.local}` |
+| Durable storage | `${DATA_ROOT_HOST:-./data}` mounted at `/data` (see [docs/storage.md](docs/storage.md)) |
 
 ---
 
