@@ -478,7 +478,7 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
               id="stt-audio"
               ref={fileRef}
               type="file"
-              accept="audio/*"
+              accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a,.webm,.mp4,.aac,.aif,.aiff"
               required
               className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             />
