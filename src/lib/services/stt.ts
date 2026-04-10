@@ -26,7 +26,19 @@ export const STT_ALLOWED_MIME_TYPES = [
   "audio/webm",
   "audio/flac",
   "audio/x-flac",
-];
+] as const;
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".flac": "audio/flac",
+  ".ogg": "audio/ogg",
+  ".m4a": "audio/m4a",
+  ".mp4": "audio/mp4",
+  ".webm": "audio/webm",
+  ".aif": "audio/aiff",
+  ".aiff": "audio/aiff",
+};
 
 /** Options for a transcription request. */
 export interface SttOptions {
@@ -46,7 +58,8 @@ export interface SttSegment {
 
 /** Result returned by the STT service. */
 export interface SttResult {
-  transcript: string;
+  text?: string;
+  transcript?: string;
   segments?: SttSegment[];
 }
 
@@ -70,6 +83,53 @@ export function getSttServiceUrl(): string {
   return url.replace(/\/$/, "");
 }
 
+function extensionFor(filename: string): string {
+  const idx = filename.lastIndexOf(".");
+  return idx >= 0 ? filename.slice(idx).toLowerCase() : "";
+}
+
+function sanitizeFilename(filename: string): string {
+  const trimmed = filename.trim();
+  const collapsed = trimmed.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/-+/g, "-");
+  return collapsed.replace(/^[-.]+|[-.]+$/g, "") || "audio";
+}
+
+export function normalizeAudioUpload(
+  filename: string,
+  contentType?: string | null,
+): { filename: string; contentType: string } {
+  const safeFilename = sanitizeFilename(filename);
+  const ext = extensionFor(safeFilename);
+  const normalizedType = contentType?.trim().toLowerCase() ?? "";
+  const inferredType = MIME_BY_EXTENSION[ext] ?? "";
+  const resolvedType = normalizedType || inferredType;
+
+  if (!ext || !inferredType) {
+    throw new SttServiceError(415, "Unsupported audio format");
+  }
+  if (!resolvedType || !STT_ALLOWED_MIME_TYPES.includes(resolvedType as (typeof STT_ALLOWED_MIME_TYPES)[number])) {
+    throw new SttServiceError(415, "Unsupported audio format");
+  }
+
+  return {
+    filename: safeFilename,
+    contentType: resolvedType,
+  };
+}
+
+export function getTranscriptText(result: SttResult): string {
+  if (result.transcript?.trim()) {
+    return result.transcript.trim();
+  }
+  if (result.text?.trim()) {
+    return result.text.trim();
+  }
+  if (result.segments?.length) {
+    return result.segments.map((segment) => segment.text).join(" ").trim();
+  }
+  return "";
+}
+
 /**
  * Sends `audioData` to the internal STT service and returns the transcription
  * result. Only call this from server-side code.
@@ -80,8 +140,13 @@ export async function transcribe(
   options: SttOptions = {},
 ): Promise<SttResult> {
   const baseUrl = getSttServiceUrl();
+  const { filename: safeFilename, contentType } = normalizeAudioUpload(filename, null);
   const form = new FormData();
-  form.append("audio", new Blob([new Uint8Array(audioData)]), filename);
+  form.append(
+    "file",
+    new Blob([new Uint8Array(audioData)], { type: contentType }),
+    safeFilename,
+  );
   if (options.diarize) {
     form.append("diarize", "true");
   }
@@ -92,6 +157,36 @@ export async function transcribe(
   const res = await fetch(`${baseUrl}/api/transcribe`, {
     method: "POST",
     body: form,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new SttServiceError(
+      res.status,
+      text || `STT service returned ${res.status}`,
+    );
+  }
+
+  return res.json() as Promise<SttResult>;
+}
+
+export async function transcribeFromSourceUrl(
+  sourceUrl: string,
+  filename: string,
+  options: SttOptions = {},
+): Promise<SttResult> {
+  const baseUrl = getSttServiceUrl();
+  const { filename: safeFilename } = normalizeAudioUpload(filename, null);
+
+  const res = await fetch(`${baseUrl}/api/transcribe-from-url`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      source_url: sourceUrl,
+      filename: safeFilename,
+      diarize: options.diarize ?? false,
+      language: options.language,
+    }),
   });
 
   if (!res.ok) {

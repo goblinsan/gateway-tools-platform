@@ -3,27 +3,45 @@
 import { useRef, useState } from "react";
 
 interface SttSegment {
-  speaker: string;
+  speaker?: string;
   text: string;
   start: number;
   end: number;
 }
 
 interface SttResult {
-  transcript: string;
+  text?: string;
+  transcript?: string;
   segments?: SttSegment[];
 }
 
 interface SubmitState {
-  status: "idle" | "uploading" | "success" | "error";
+  status: "idle" | "uploading" | "transcribing" | "success" | "error";
   result?: SttResult;
   artifactId?: string;
   sessionId?: string;
   error?: string;
 }
 
+interface UploadTarget {
+  uploadKey: string;
+  uploadUrl: string;
+  headers: Record<string, string>;
+  expiresInSeconds: number;
+  filename: string;
+  contentType: string;
+}
+
+interface JobResponse {
+  result?: SttResult;
+  artifact?: { id?: string };
+  session?: { id?: string };
+  error?: string;
+}
+
 /**
- * Client component that renders the STT upload form, submits to the broker
+ * Client component that renders the STT upload form, uploads large files
+ * directly to object storage, submits a small transcription job to the broker
  * API route, and displays the transcript inline.
  */
 export function SttForm({ onComplete }: { onComplete?: () => void }) {
@@ -32,6 +50,14 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
   const [language, setLanguage] = useState("");
   const [state, setState] = useState<SubmitState>({ status: "idle" });
 
+  async function parseJsonSafely<T>(res: Response): Promise<T> {
+    try {
+      return (await res.json()) as T;
+    } catch {
+      return {} as T;
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const file = fileRef.current?.files?.[0];
@@ -39,23 +65,79 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
 
     setState({ status: "uploading" });
 
-    const form = new FormData();
-    form.append("audio", file);
-    form.append("diarize", String(diarize));
-    if (language.trim()) form.append("language", language.trim());
-
     try {
-      const res = await fetch("/api/tools/stt", { method: "POST", body: form });
-      const json = await res.json();
-      if (!res.ok) {
-        setState({ status: "error", error: json.error ?? "Unknown error" });
+      const uploadInit = await fetch("/api/tools/stt/upload", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+          size: file.size,
+        }),
+      });
+      const uploadJson = await parseJsonSafely<Partial<UploadTarget> & { error?: string }>(uploadInit);
+      if (!uploadInit.ok) {
+        setState({
+          status: "error",
+          error:
+            typeof uploadJson.error === "string"
+              ? uploadJson.error
+              : "Unable to initialize upload",
+        });
         return;
       }
+      if (
+        !uploadJson.uploadKey ||
+        !uploadJson.uploadUrl ||
+        !uploadJson.filename ||
+        !uploadJson.headers
+      ) {
+        setState({ status: "error", error: "Upload target response was incomplete" });
+        return;
+      }
+
+      const target = uploadJson as UploadTarget;
+      const uploadRes = await fetch(target.uploadUrl, {
+        method: "PUT",
+        headers: target.headers,
+        body: file,
+      });
+      if (!uploadRes.ok) {
+        setState({
+          status: "error",
+          error: `Upload failed with status ${uploadRes.status}`,
+        });
+        return;
+      }
+
+      setState({ status: "transcribing" });
+      const jobRes = await fetch("/api/tools/stt", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          uploadKey: target.uploadKey,
+          filename: target.filename,
+          diarize,
+          language: language.trim() || undefined,
+        }),
+      });
+      const jobJson = await parseJsonSafely<JobResponse>(jobRes);
+      if (!jobRes.ok) {
+        setState({
+          status: "error",
+          error:
+            typeof jobJson.error === "string"
+              ? jobJson.error
+              : "Unknown error",
+        });
+        return;
+      }
+
       setState({
         status: "success",
-        result: json.result as SttResult,
-        artifactId: json.artifact?.id,
-        sessionId: json.session?.id,
+        result: jobJson.result,
+        artifactId: jobJson.artifact?.id,
+        sessionId: jobJson.session?.id,
       });
       onComplete?.();
     } catch {
@@ -88,7 +170,7 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
               className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             />
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              MP3, WAV, M4A, OGG, FLAC, WebM — up to 500 MiB
+              MP3, WAV, M4A, OGG, FLAC, WebM, AIFF — uploaded directly to object storage, up to 500 MiB
             </p>
           </div>
 
@@ -113,8 +195,7 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
               htmlFor="stt-language"
               className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
             >
-              Language hint{" "}
-              <span className="font-normal text-zinc-400">(optional)</span>
+              Language hint <span className="font-normal text-zinc-400">(optional)</span>
             </label>
             <input
               id="stt-language"
@@ -134,10 +215,14 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
 
           <button
             type="submit"
-            disabled={state.status === "uploading"}
+            disabled={state.status === "uploading" || state.status === "transcribing"}
             className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {state.status === "uploading" ? "Transcribing…" : "Transcribe"}
+            {state.status === "uploading"
+              ? "Uploading…"
+              : state.status === "transcribing"
+                ? "Transcribing…"
+                : "Transcribe"}
           </button>
         </form>
       )}
@@ -153,7 +238,7 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
                 {state.result.segments.map((seg, i) => (
                   <li key={i} className="text-sm">
                     <span className="font-medium text-indigo-600 dark:text-indigo-400">
-                      {seg.speaker}
+                      {seg.speaker ?? "SPEAKER"}
                     </span>{" "}
                     <span className="text-zinc-700 dark:text-zinc-300">
                       {seg.text}
@@ -163,7 +248,7 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
               </ul>
             ) : (
               <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
-                {state.result.transcript}
+                {state.result.transcript ?? state.result.text}
               </p>
             )}
           </div>

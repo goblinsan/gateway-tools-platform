@@ -12,6 +12,12 @@ the place where STT or CV inference logic lives.
   - `STT_SERVICE_URL`
   - `CV_SERVICE_URL`
 - Never expose raw internal hostnames or LAN IPs to the browser bundle.
+- Large STT uploads must not be proxied through this app route body. Use the
+  presigned object-store flow:
+  1. browser asks this app for a signed upload target
+  2. browser uploads directly to S3-compatible storage
+  3. this app submits a small JSON job to `stt-service`
+  4. `stt-service` pulls the object from a presigned read URL
 
 ## Auth and identity
 
@@ -19,12 +25,14 @@ the place where STT or CV inference logic lives.
 - Keep user segregation server-owned:
   - derive user identity from Cloudflare headers
   - store sessions and artifacts under per-user workspaces
+  - scope object-store keys by derived user ID
   - never trust browser-provided user IDs for storage paths
 
 ## Upstream service contracts
 
 - `stt-service` current upstream endpoints:
   - `POST /api/transcribe`
+  - `POST /api/transcribe-from-url`
   - `GET /api/health`
   - `GET /api/info`
 - `cv-sam-service` current upstream endpoints:
@@ -39,6 +47,7 @@ the place where STT or CV inference logic lives.
   - broker clients in `src/lib/services/*`
   - the browser forms if they expose those capabilities
   - tests that assert endpoint paths or supported MIME types
+  - deploy docs and `.env.example` when new env vars are required
 
 ## Frontend expectations
 
