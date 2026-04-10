@@ -63,6 +63,19 @@ export interface SttResult {
   segments?: SttSegment[];
 }
 
+export interface SttJobAccepted {
+  jobId: string;
+  status: "queued" | "running" | "complete" | "failed";
+}
+
+export interface SttJobStatus extends SttJobAccepted {
+  createdAt: string;
+  updatedAt: string;
+  filename?: string;
+  result?: SttResult;
+  error?: string;
+}
+
 /** Thrown when the STT service returns a non-OK response. */
 export class SttServiceError extends Error {
   constructor(
@@ -73,6 +86,40 @@ export class SttServiceError extends Error {
     this.name = "SttServiceError";
   }
 }
+
+export const STT_LANGUAGE_OPTIONS = [
+  { value: "en", label: "English" },
+  { value: "es", label: "Spanish" },
+  { value: "fr", label: "French" },
+  { value: "de", label: "German" },
+  { value: "it", label: "Italian" },
+  { value: "pt", label: "Portuguese" },
+  { value: "nl", label: "Dutch" },
+  { value: "ru", label: "Russian" },
+  { value: "uk", label: "Ukrainian" },
+  { value: "pl", label: "Polish" },
+  { value: "cs", label: "Czech" },
+  { value: "tr", label: "Turkish" },
+  { value: "ar", label: "Arabic" },
+  { value: "he", label: "Hebrew" },
+  { value: "hi", label: "Hindi" },
+  { value: "bn", label: "Bengali" },
+  { value: "ur", label: "Urdu" },
+  { value: "zh", label: "Chinese" },
+  { value: "ja", label: "Japanese" },
+  { value: "ko", label: "Korean" },
+  { value: "vi", label: "Vietnamese" },
+  { value: "th", label: "Thai" },
+  { value: "id", label: "Indonesian" },
+  { value: "ms", label: "Malay" },
+  { value: "sv", label: "Swedish" },
+  { value: "no", label: "Norwegian" },
+  { value: "da", label: "Danish" },
+  { value: "fi", label: "Finnish" },
+  { value: "el", label: "Greek" },
+  { value: "ro", label: "Romanian" },
+  { value: "hu", label: "Hungarian" },
+] as const;
 
 /** Returns the configured STT service base URL (trailing slash stripped). */
 export function getSttServiceUrl(): string {
@@ -198,4 +245,101 @@ export async function transcribeFromSourceUrl(
   }
 
   return res.json() as Promise<SttResult>;
+}
+
+export async function submitTranscribeJob(
+  audioData: Buffer | Uint8Array,
+  filename: string,
+  options: SttOptions = {},
+): Promise<SttJobAccepted> {
+  const baseUrl = getSttServiceUrl();
+  const { filename: safeFilename, contentType } = normalizeAudioUpload(filename, null);
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([new Uint8Array(audioData)], { type: contentType }),
+    safeFilename,
+  );
+  if (options.diarize) {
+    form.append("diarize", "true");
+  }
+  if (options.language) {
+    form.append("language", options.language);
+  }
+
+  const res = await fetch(`${baseUrl}/api/transcribe-async`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new SttServiceError(res.status, text || `STT service returned ${res.status}`);
+  }
+
+  const payload = await res.json() as { job_id: string; status: SttJobAccepted["status"] };
+  return {
+    jobId: payload.job_id,
+    status: payload.status,
+  };
+}
+
+export async function submitTranscribeFromSourceUrlJob(
+  sourceUrl: string,
+  filename: string,
+  options: SttOptions = {},
+): Promise<SttJobAccepted> {
+  const baseUrl = getSttServiceUrl();
+  const { filename: safeFilename } = normalizeAudioUpload(filename, null);
+
+  const res = await fetch(`${baseUrl}/api/transcribe-from-url-async`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      source_url: sourceUrl,
+      filename: safeFilename,
+      diarize: options.diarize ?? false,
+      language: options.language,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new SttServiceError(res.status, text || `STT service returned ${res.status}`);
+  }
+
+  const payload = await res.json() as { job_id: string; status: SttJobAccepted["status"] };
+  return {
+    jobId: payload.job_id,
+    status: payload.status,
+  };
+}
+
+export async function getTranscribeJobStatus(jobId: string): Promise<SttJobStatus> {
+  const baseUrl = getSttServiceUrl();
+  const res = await fetch(`${baseUrl}/api/jobs/${encodeURIComponent(jobId)}`, {
+    method: "GET",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new SttServiceError(res.status, text || `STT service returned ${res.status}`);
+  }
+
+  const payload = await res.json() as {
+    job_id: string;
+    status: SttJobStatus["status"];
+    created_at: string;
+    updated_at: string;
+    filename?: string;
+    result?: SttResult;
+    error?: string;
+  };
+  return {
+    jobId: payload.job_id,
+    status: payload.status,
+    createdAt: payload.created_at,
+    updatedAt: payload.updated_at,
+    filename: payload.filename,
+    result: payload.result,
+    error: payload.error,
+  };
 }

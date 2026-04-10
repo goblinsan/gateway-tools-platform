@@ -1,15 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import {
-  transcribe,
-  transcribeFromSourceUrl,
+  submitTranscribeFromSourceUrlJob,
+  submitTranscribeJob,
   STT_MAX_FILE_BYTES,
   SttServiceError,
-  getTranscriptText,
   normalizeAudioUpload,
 } from "@/lib/services/stt";
 import { createSession, updateSession } from "@/lib/storage/sessions";
-import { saveArtifact } from "@/lib/storage/artifacts";
 import {
   assertUploadedObjectExists,
   createPresignedSttDownloadUrl,
@@ -26,70 +24,6 @@ interface SttJobBody {
 async function requireUserId(): Promise<string | null> {
   const h = await headers();
   return h.get("x-user-id");
-}
-
-async function finishSuccessfulSession(
-  userId: string,
-  sessionId: string,
-  filename: string,
-  diarize: boolean,
-  language: string | undefined,
-  storageKey: string | undefined,
-  result: Awaited<ReturnType<typeof transcribe>>,
-) {
-  const transcriptText = result.segments
-    ? result.segments.map((s) => `[${s.speaker ?? "UNKNOWN"}] ${s.text}`).join("\n")
-    : getTranscriptText(result);
-  const artifact = await saveArtifact(
-    userId,
-    sessionId,
-    "transcript.txt",
-    "text/plain",
-    Buffer.from(transcriptText, "utf8"),
-  );
-
-  const updatedSession = await updateSession(userId, sessionId, {
-    status: "complete",
-    metadata: {
-      filename,
-      diarize,
-      language,
-      storageKey,
-      transcript: getTranscriptText(result),
-      segments: result.segments,
-      artifactId: artifact.id,
-    },
-  });
-
-  return NextResponse.json({ session: updatedSession, artifact, result });
-}
-
-async function failSession(
-  userId: string,
-  sessionId: string,
-  filename: string,
-  diarize: boolean,
-  language: string | undefined,
-  storageKey: string | undefined,
-  err: unknown,
-) {
-  const message =
-    err instanceof SttServiceError ? err.message : "Upstream service error";
-  await updateSession(userId, sessionId, {
-    status: "failed",
-    metadata: {
-      filename,
-      diarize,
-      language,
-      storageKey,
-      error: message,
-    },
-  });
-  const status = err instanceof SttServiceError ? err.status : 502;
-  return NextResponse.json(
-    { error: message, sessionId },
-    { status },
-  );
 }
 
 async function handleMultipart(userId: string, req: NextRequest): Promise<NextResponse> {
@@ -140,30 +74,42 @@ async function handleMultipart(userId: string, req: NextRequest): Promise<NextRe
   });
 
   try {
-    await updateSession(userId, session.id, { status: "running" });
     const audioBuffer = Buffer.from(await audioFile.arrayBuffer());
-    const result = await transcribe(audioBuffer, normalized.filename, {
+    const job = await submitTranscribeJob(audioBuffer, normalized.filename, {
       diarize,
       language,
     });
-    return finishSuccessfulSession(
-      userId,
-      session.id,
-      normalized.filename,
-      diarize,
-      language,
-      undefined,
-      result,
+    const updatedSession = await updateSession(userId, session.id, {
+      status: job.status === "queued" ? "pending" : "running",
+      metadata: {
+        ...session.metadata,
+        sttJobId: job.jobId,
+        sttJobStatus: job.status,
+      },
+    });
+    return NextResponse.json(
+      {
+        session: updatedSession,
+        job: {
+          id: job.jobId,
+          status: job.status,
+        },
+      },
+      { status: 202 },
     );
   } catch (err) {
-    return failSession(
-      userId,
-      session.id,
-      normalized.filename,
-      diarize,
-      language,
-      undefined,
-      err,
+    const message =
+      err instanceof SttServiceError ? err.message : "Upstream service error";
+    await updateSession(userId, session.id, {
+      status: "failed",
+      metadata: {
+        ...session.metadata,
+        error: message,
+      },
+    });
+    return NextResponse.json(
+      { error: message, sessionId: session.id },
+      { status: err instanceof SttServiceError ? err.status : 502 },
     );
   }
 }
@@ -216,30 +162,42 @@ async function handleObjectStoreJob(userId: string, req: NextRequest): Promise<N
   });
 
   try {
-    await updateSession(userId, session.id, { status: "running" });
     const sourceUrl = await createPresignedSttDownloadUrl(userId, body.uploadKey);
-    const result = await transcribeFromSourceUrl(sourceUrl, normalized.filename, {
+    const job = await submitTranscribeFromSourceUrlJob(sourceUrl, normalized.filename, {
       diarize,
       language,
     });
-    return finishSuccessfulSession(
-      userId,
-      session.id,
-      normalized.filename,
-      diarize,
-      language,
-      body.uploadKey,
-      result,
+    const updatedSession = await updateSession(userId, session.id, {
+      status: job.status === "queued" ? "pending" : "running",
+      metadata: {
+        ...session.metadata,
+        sttJobId: job.jobId,
+        sttJobStatus: job.status,
+      },
+    });
+    return NextResponse.json(
+      {
+        session: updatedSession,
+        job: {
+          id: job.jobId,
+          status: job.status,
+        },
+      },
+      { status: 202 },
     );
   } catch (err) {
-    return failSession(
-      userId,
-      session.id,
-      normalized.filename,
-      diarize,
-      language,
-      body.uploadKey,
-      err,
+    const message =
+      err instanceof SttServiceError ? err.message : "Upstream service error";
+    await updateSession(userId, session.id, {
+      status: "failed",
+      metadata: {
+        ...session.metadata,
+        error: message,
+      },
+    });
+    return NextResponse.json(
+      { error: message, sessionId: session.id },
+      { status: err instanceof SttServiceError ? err.status : 502 },
     );
   }
 }

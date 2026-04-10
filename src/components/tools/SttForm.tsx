@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { STT_LANGUAGE_OPTIONS } from "@/lib/services/stt";
 
 interface SttSegment {
   speaker?: string;
@@ -16,7 +17,7 @@ interface SttResult {
 }
 
 interface SubmitState {
-  status: "idle" | "uploading" | "transcribing" | "success" | "error";
+  status: "idle" | "uploading" | "queued" | "transcribing" | "success" | "error";
   result?: SttResult;
   artifactId?: string;
   sessionId?: string;
@@ -33,9 +34,22 @@ interface UploadTarget {
 }
 
 interface JobResponse {
-  result?: SttResult;
-  artifact?: { id?: string };
   session?: { id?: string };
+  job?: { id?: string; status?: string };
+  error?: string;
+}
+
+interface SessionResponse {
+  session?: {
+    id?: string;
+    status?: "pending" | "running" | "complete" | "failed";
+    metadata?: {
+      artifactId?: string;
+      error?: string;
+    };
+  };
+  artifact?: { id?: string };
+  result?: SttResult;
   error?: string;
 }
 
@@ -47,7 +61,7 @@ interface JobResponse {
 export function SttForm({ onComplete }: { onComplete?: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [diarize, setDiarize] = useState(false);
-  const [language, setLanguage] = useState("");
+  const [language, setLanguage] = useState("en");
   const [state, setState] = useState<SubmitState>({ status: "idle" });
 
   async function parseJsonSafely<T>(res: Response): Promise<T> {
@@ -110,7 +124,7 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
         return;
       }
 
-      setState({ status: "transcribing" });
+      setState({ status: "queued" });
       const jobRes = await fetch("/api/tools/stt", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -118,7 +132,7 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
           uploadKey: target.uploadKey,
           filename: target.filename,
           diarize,
-          language: language.trim() || undefined,
+          language: language || undefined,
         }),
       });
       const jobJson = await parseJsonSafely<JobResponse>(jobRes);
@@ -134,16 +148,101 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
       }
 
       setState({
-        status: "success",
-        result: jobJson.result,
-        artifactId: jobJson.artifact?.id,
+        status: "queued",
         sessionId: jobJson.session?.id,
+        error: typeof jobJson.error === "string" ? jobJson.error : undefined,
       });
-      onComplete?.();
     } catch {
       setState({ status: "error", error: "Network error – please try again" });
     }
   }
+
+  useEffect(() => {
+    if (!state.sessionId || (state.status !== "queued" && state.status !== "transcribing")) {
+      return;
+    }
+
+    let cancelled = false;
+    let timer: number | undefined;
+
+    async function poll(): Promise<void> {
+      try {
+        const response = await fetch(`/api/sessions/${state.sessionId}`, {
+          cache: "no-store",
+        });
+        const payload = await parseJsonSafely<SessionResponse>(response);
+        if (!response.ok) {
+          if (!cancelled) {
+            setState({
+              status: "error",
+              sessionId: state.sessionId,
+              error:
+                typeof payload.error === "string"
+                  ? payload.error
+                  : "Unable to read transcription status",
+            });
+          }
+          return;
+        }
+
+        const sessionStatus = payload.session?.status;
+        if (sessionStatus === "complete") {
+          if (!cancelled) {
+            setState({
+              status: "success",
+              sessionId: state.sessionId,
+              result: payload.result,
+              artifactId:
+                payload.artifact?.id ??
+                (typeof payload.session?.metadata?.artifactId === "string"
+                  ? payload.session.metadata.artifactId
+                  : undefined),
+            });
+            onComplete?.();
+          }
+          return;
+        }
+
+        if (sessionStatus === "failed") {
+          if (!cancelled) {
+            setState({
+              status: "error",
+              sessionId: state.sessionId,
+              error:
+                typeof payload.session?.metadata?.error === "string"
+                  ? payload.session.metadata.error
+                  : "Transcription failed",
+            });
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setState((current) => ({
+            ...current,
+            status: "transcribing",
+          }));
+          timer = window.setTimeout(poll, 2500);
+        }
+      } catch {
+        if (!cancelled) {
+          setState({
+            status: "error",
+            sessionId: state.sessionId,
+            error: "Unable to poll transcription status",
+          });
+        }
+      }
+    }
+
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [state.sessionId, state.status, onComplete]);
 
   function reset() {
     setState({ status: "idle" });
@@ -170,7 +269,7 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
               className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 file:mr-3 file:rounded file:border-0 file:bg-indigo-50 file:px-3 file:py-1 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
             />
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              MP3, WAV, M4A, OGG, FLAC, WebM, AIFF — uploaded directly to object storage, up to 500 MiB
+              MP3, WAV, M4A, OGG, FLAC, WebM, AIFF — uploaded directly to object storage, then transcribed as an async job up to 500 MiB
             </p>
           </div>
 
@@ -195,16 +294,23 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
               htmlFor="stt-language"
               className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
             >
-              Language hint <span className="font-normal text-zinc-400">(optional)</span>
+              Language
             </label>
-            <input
+            <select
               id="stt-language"
-              type="text"
-              placeholder="e.g. en-US"
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
               className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500"
-            />
+            >
+              {STT_LANGUAGE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Defaults to English. Change it when you know the source language.
+            </p>
           </div>
 
           {state.status === "error" && (
@@ -215,12 +321,14 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
 
           <button
             type="submit"
-            disabled={state.status === "uploading" || state.status === "transcribing"}
+            disabled={state.status === "uploading" || state.status === "queued" || state.status === "transcribing"}
             className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {state.status === "uploading"
               ? "Uploading…"
-              : state.status === "transcribing"
+              : state.status === "queued"
+                ? "Queued…"
+                : state.status === "transcribing"
                 ? "Transcribing…"
                 : "Transcribe"}
           </button>
