@@ -6,8 +6,8 @@
  * internal service endpoint is never exposed to the browser.
  */
 
-/** Maximum audio file size accepted by this broker (100 MiB). */
-export const STT_MAX_FILE_BYTES = 100 * 1024 * 1024;
+/** Maximum audio file size accepted by this broker (500 MiB). */
+export const STT_MAX_FILE_BYTES = 500 * 1024 * 1024;
 
 /** Supported audio MIME types. */
 export const STT_ALLOWED_MIME_TYPES = [

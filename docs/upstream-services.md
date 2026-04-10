@@ -45,7 +45,7 @@ Content-Type: multipart/form-data
 `audio/mp4`, `audio/m4a`, `audio/x-m4a`, `audio/ogg`, `audio/webm`,
 `audio/flac`, `audio/x-flac`.
 
-**Maximum file size**: 100 MiB (enforced by the broker before forwarding).
+**Maximum file size**: 500 MiB (enforced by the broker before forwarding).
 
 ### Response
 
@@ -169,7 +169,7 @@ STT_SERVICE_URL=http://user:password@<stt-host>:<port>
 |---------------------------|------------------------------|----------------------------------|
 | Endpoint pattern          | `POST /api/transcribe`       | `POST /api/segment|analyze|extract-palette` |
 | Request format            | `multipart/form-data`        | `multipart/form-data`            |
-| Max input size            | 100 MiB                      | 10 MiB                           |
+| Max input size            | 500 MiB                      | 10 MiB                           |
 | Response format           | `application/json`           | Varies (image/json)              |
 | Suggested proxy timeout   | 120 s                        | 120 s                            |
 | Auth between broker & svc | Network isolation (no token) | Network isolation (no token)     |

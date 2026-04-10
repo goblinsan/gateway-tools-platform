@@ -30,8 +30,8 @@ describe("getSttServiceUrl", () => {
 });
 
 describe("STT_MAX_FILE_BYTES", () => {
-  it("is 100 MiB", () => {
-    expect(STT_MAX_FILE_BYTES).toBe(100 * 1024 * 1024);
+  it("is 500 MiB", () => {
+    expect(STT_MAX_FILE_BYTES).toBe(500 * 1024 * 1024);
   });
 });
 
