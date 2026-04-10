@@ -30,7 +30,7 @@ error at request time if either is missing.
 ### Request
 
 ```
-POST {STT_SERVICE_URL}/transcribe
+POST {STT_SERVICE_URL}/api/transcribe
 Content-Type: multipart/form-data
 ```
 
@@ -41,8 +41,9 @@ Content-Type: multipart/form-data
 | `language` | string | No       | BCP-47 language hint (e.g. `"en-US"`). Auto-detected when omitted. |
 
 **Accepted audio formats**: `audio/mpeg`, `audio/mp3`, `audio/wav`,
-`audio/wave`, `audio/x-wav`, `audio/mp4`, `audio/m4a`, `audio/x-m4a`,
-`audio/ogg`, `audio/webm`, `audio/flac`, `audio/x-flac`.
+`audio/wave`, `audio/x-wav`, `audio/aiff`, `audio/x-aiff`, `audio/aif`,
+`audio/mp4`, `audio/m4a`, `audio/x-m4a`, `audio/ogg`, `audio/webm`,
+`audio/flac`, `audio/x-flac`.
 
 **Maximum file size**: 100 MiB (enforced by the broker before forwarding).
 
@@ -104,9 +105,9 @@ Content-Type: multipart/form-data
 
 | Operation  | Description                                                  |
 |------------|--------------------------------------------------------------|
-| `segment`  | Identify and mask distinct objects using SAM.                |
-| `analyze`  | Describe scene content and detected objects (returns JSON).  |
-| `palette`  | Extract the dominant colour palette (returns JSON).          |
+| `segment`  | `POST /api/segment` | Identify and mask distinct objects using SAM.               |
+| `analyze`  | `POST /api/analyze` | Describe scene content and detected objects (returns JSON). |
+| `palette`  | `POST /api/extract-palette` | Extract the dominant colour palette (returns JSON). |
 
 | Field   | Type | Required | Description             |
 |---------|------|----------|-------------------------|
@@ -166,7 +167,7 @@ STT_SERVICE_URL=http://user:password@<stt-host>:<port>
 
 | Property                  | STT                          | CV (segment/analyze/palette)     |
 |---------------------------|------------------------------|----------------------------------|
-| Endpoint pattern          | `POST /transcribe`           | `POST /<operation>`              |
+| Endpoint pattern          | `POST /api/transcribe`       | `POST /api/segment|analyze|extract-palette` |
 | Request format            | `multipart/form-data`        | `multipart/form-data`            |
 | Max input size            | 100 MiB                      | 10 MiB                           |
 | Response format           | `application/json`           | Varies (image/json)              |
