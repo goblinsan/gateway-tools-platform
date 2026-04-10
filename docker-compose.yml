@@ -10,42 +10,39 @@
 #   docker compose --profile blue up -d   # start blue slot (port 3000)
 #   docker compose --profile green up -d  # start green slot (port 3001)
 
+x-app-common: &app-common
+  build: .
+  image: gateway-tools-platform:latest
+  env_file:
+    - ${APP_ENV_FILE:-.env.local}
+  volumes:
+    - ${DATA_ROOT_HOST:-./data}:/data
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 10s
+
 services:
   app:
-    build: .
-    image: gateway-tools-platform:latest
+    <<: *app-common
     ports:
-      - "3000:3000"
-    env_file:
-      - ${APP_ENV_FILE:-.env.local}
-    volumes:
-      - ${DATA_ROOT_HOST:-./data}:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+      - "${HOST_PORT:-3000}:3000"
 
   # ── Blue slot (primary) ──────────────────────────────────────────────────────
   blue:
-    extends:
-      service: app
+    <<: *app-common
     profiles: [blue]
     container_name: gateway-tools-blue
     ports:
-      - "3000:3000"
-    volumes:
-      - ${DATA_ROOT_HOST:-./data}:/data
+      - "${HOST_PORT:-3000}:3000"
 
   # ── Green slot (standby / next version) ─────────────────────────────────────
   green:
-    extends:
-      service: app
+    <<: *app-common
     profiles: [green]
     container_name: gateway-tools-green
     ports:
-      - "3001:3000"
-    volumes:
-      - ${DATA_ROOT_HOST:-./data}:/data
+      - "${HOST_PORT:-3000}:3000"

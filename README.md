@@ -89,8 +89,8 @@ docker build -t gateway-tools-platform:latest .
 docker compose up -d
 
 # Blue/green deployment
-docker compose --profile blue  up -d   # binds :3000
-docker compose --profile green up -d   # binds :3001
+HOST_PORT=3000 docker compose --profile blue  up -d blue
+HOST_PORT=3001 docker compose --profile green up -d green
 ```
 
 The health endpoint `GET /api/health` is used by the Docker compose

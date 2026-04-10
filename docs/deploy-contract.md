@@ -112,15 +112,15 @@ The repository ships a `docker-compose.yml` with two profiles:
 Start a specific slot:
 
 ```bash
-docker compose --profile blue  up -d
-docker compose --profile green up -d
+HOST_PORT=3000 docker compose --profile blue  up -d blue
+HOST_PORT=3001 docker compose --profile green up -d green
 ```
 
 A default `app` service (no profile) is also provided for simple single-slot
 deployments:
 
 ```bash
-docker compose up -d   # binds :3000
+docker compose up -d   # binds :3000 by default
 ```
 
 ---
