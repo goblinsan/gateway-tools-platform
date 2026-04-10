@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareUser } from "@/lib/auth/cloudflare";
 
+const PUBLIC_PATH_PREFIXES = [
+  "/_next/static",
+  "/_next/image",
+  "/favicon.ico",
+  "/unauthorized",
+  "/api/health",
+] as const;
+
+export function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
 /**
  * Paths that are publicly accessible without a Cloudflare Access identity.
  * All other routes require a valid `Cf-Access-Authenticated-User-Email` header.
  */
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon\\.ico|unauthorized).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|unauthorized|api/health).*)",
   ],
 };
 
@@ -31,6 +43,10 @@ export const config = {
  *   - `x-user-id`     – the stable, derived user ID
  */
 export async function proxy(req: NextRequest): Promise<NextResponse> {
+  if (isPublicPath(req.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
   const user = await getCloudflareUser(req.headers);
 
   if (!user) {
