@@ -39,6 +39,7 @@ describe("STT_ALLOWED_MIME_TYPES", () => {
   it("includes common audio formats", () => {
     expect(STT_ALLOWED_MIME_TYPES).toContain("audio/mpeg");
     expect(STT_ALLOWED_MIME_TYPES).toContain("audio/wav");
+    expect(STT_ALLOWED_MIME_TYPES).toContain("audio/aiff");
     expect(STT_ALLOWED_MIME_TYPES).toContain("audio/ogg");
     expect(STT_ALLOWED_MIME_TYPES).toContain("audio/flac");
     expect(STT_ALLOWED_MIME_TYPES).toContain("audio/webm");
@@ -60,7 +61,7 @@ describe("transcribe", () => {
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://stt:8080/transcribe");
+    expect(url).toBe("http://stt:8080/api/transcribe");
     expect(init.method).toBe("POST");
     expect(result).toEqual(mockResult);
   });

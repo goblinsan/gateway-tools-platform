@@ -57,7 +57,7 @@ describe("processImage", () => {
     await processImage(imageBytes, "photo.png", "segment");
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://cv:9000/segment");
+    expect(url).toBe("http://cv:9000/api/segment");
     expect(init.method).toBe("POST");
   });
 
@@ -76,6 +76,21 @@ describe("processImage", () => {
     const body = fetchMock.mock.calls[0][1].body as FormData;
     const imageField = body.get("image");
     expect(imageField).not.toBeNull();
+  });
+
+  it("maps palette extraction to the upstream extract-palette endpoint", async () => {
+    process.env.CV_SERVICE_URL = "http://cv:9000";
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => "application/json" },
+      arrayBuffer: async () => new ArrayBuffer(0),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await processImage(Buffer.from("x"), "img.png", "palette");
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://cv:9000/api/extract-palette");
   });
 
   it("derives .png extension for image/png responses", async () => {

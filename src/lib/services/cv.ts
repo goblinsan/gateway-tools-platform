@@ -21,6 +21,11 @@ export const CV_ALLOWED_MIME_TYPES = [
 /** Supported CV operations. */
 export type CvOperation = "segment" | "analyze" | "palette";
 
+function upstreamPathForOperation(operation: CvOperation): string {
+  if (operation === "palette") return "/api/extract-palette";
+  return `/api/${operation}`;
+}
+
 /** Result returned by the CV service. */
 export interface CvResult {
   /** MIME type of the result (e.g. "image/png", "application/json"). */
@@ -62,9 +67,9 @@ export async function processImage(
 ): Promise<CvResult> {
   const baseUrl = getCvServiceUrl();
   const form = new FormData();
-  form.append("image", new Blob([imageData]), filename);
+  form.append("image", new Blob([new Uint8Array(imageData)]), filename);
 
-  const res = await fetch(`${baseUrl}/${operation}`, {
+  const res = await fetch(`${baseUrl}${upstreamPathForOperation(operation)}`, {
     method: "POST",
     body: form,
   });

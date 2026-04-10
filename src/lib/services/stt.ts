@@ -16,6 +16,9 @@ export const STT_ALLOWED_MIME_TYPES = [
   "audio/wav",
   "audio/wave",
   "audio/x-wav",
+  "audio/aiff",
+  "audio/x-aiff",
+  "audio/aif",
   "audio/mp4",
   "audio/m4a",
   "audio/x-m4a",
@@ -78,7 +81,7 @@ export async function transcribe(
 ): Promise<SttResult> {
   const baseUrl = getSttServiceUrl();
   const form = new FormData();
-  form.append("audio", new Blob([audioData]), filename);
+  form.append("audio", new Blob([new Uint8Array(audioData)]), filename);
   if (options.diarize) {
     form.append("diarize", "true");
   }
@@ -86,7 +89,7 @@ export async function transcribe(
     form.append("language", options.language);
   }
 
-  const res = await fetch(`${baseUrl}/transcribe`, {
+  const res = await fetch(`${baseUrl}/api/transcribe`, {
     method: "POST",
     body: form,
   });

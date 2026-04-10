@@ -26,7 +26,7 @@ export async function GET(
   }
 
   const { record, data } = result;
-  return new NextResponse(data, {
+  return new NextResponse(new Uint8Array(data), {
     headers: {
       "Content-Type": record.mimeType,
       "Content-Disposition": `attachment; filename="${record.filename}"`,
