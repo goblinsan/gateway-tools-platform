@@ -19,6 +19,8 @@ interface SttJobBody {
   filename?: string;
   diarize?: boolean;
   language?: string;
+  minSpeakers?: number;
+  maxSpeakers?: number;
 }
 
 async function requireUserId(): Promise<string | null> {
@@ -65,11 +67,43 @@ async function handleMultipart(userId: string, req: NextRequest): Promise<NextRe
     typeof languageRaw === "string" && languageRaw.trim()
       ? languageRaw.trim()
       : undefined;
+  const minSpeakersRaw = formData.get("min_speakers");
+  const maxSpeakersRaw = formData.get("max_speakers");
+  const minSpeakers =
+    typeof minSpeakersRaw === "string" && minSpeakersRaw.trim()
+      ? Number.parseInt(minSpeakersRaw, 10)
+      : undefined;
+  const maxSpeakers =
+    typeof maxSpeakersRaw === "string" && maxSpeakersRaw.trim()
+      ? Number.parseInt(maxSpeakersRaw, 10)
+      : undefined;
+
+  if (
+    (minSpeakersRaw && (!Number.isInteger(minSpeakers) || (minSpeakers ?? 0) < 1)) ||
+    (maxSpeakersRaw && (!Number.isInteger(maxSpeakers) || (maxSpeakers ?? 0) < 1))
+  ) {
+    return NextResponse.json(
+      { error: "Min and max speakers must be positive integers" },
+      { status: 400 },
+    );
+  }
+  if (
+    minSpeakers !== undefined &&
+    maxSpeakers !== undefined &&
+    minSpeakers > maxSpeakers
+  ) {
+    return NextResponse.json(
+      { error: "Min speakers must be less than or equal to max speakers" },
+      { status: 400 },
+    );
+  }
 
   const session = await createSession(userId, "speech-to-text", {
     filename: normalized.filename,
     diarize,
     language,
+    minSpeakers,
+    maxSpeakers,
     source: "multipart",
   });
 
@@ -78,6 +112,8 @@ async function handleMultipart(userId: string, req: NextRequest): Promise<NextRe
     const job = await submitTranscribeJob(audioBuffer, normalized.filename, {
       diarize,
       language,
+      minSpeakers,
+      maxSpeakers,
     });
     const updatedSession = await updateSession(userId, session.id, {
       status: job.status === "queued" ? "pending" : "running",
@@ -152,11 +188,41 @@ async function handleObjectStoreJob(userId: string, req: NextRequest): Promise<N
   const language = typeof body.language === "string" && body.language.trim()
     ? body.language.trim()
     : undefined;
+  const minSpeakers =
+    typeof body.minSpeakers === "number" && Number.isInteger(body.minSpeakers)
+      ? body.minSpeakers
+      : undefined;
+  const maxSpeakers =
+    typeof body.maxSpeakers === "number" && Number.isInteger(body.maxSpeakers)
+      ? body.maxSpeakers
+      : undefined;
+
+  if (
+    (minSpeakers !== undefined && minSpeakers < 1) ||
+    (maxSpeakers !== undefined && maxSpeakers < 1)
+  ) {
+    return NextResponse.json(
+      { error: "Min and max speakers must be positive integers" },
+      { status: 400 },
+    );
+  }
+  if (
+    minSpeakers !== undefined &&
+    maxSpeakers !== undefined &&
+    minSpeakers > maxSpeakers
+  ) {
+    return NextResponse.json(
+      { error: "Min speakers must be less than or equal to max speakers" },
+      { status: 400 },
+    );
+  }
 
   const session = await createSession(userId, "speech-to-text", {
     filename: normalized.filename,
     diarize,
     language,
+    minSpeakers,
+    maxSpeakers,
     source: "object-store",
     storageKey: body.uploadKey,
   });
@@ -166,6 +232,8 @@ async function handleObjectStoreJob(userId: string, req: NextRequest): Promise<N
     const job = await submitTranscribeFromSourceUrlJob(sourceUrl, normalized.filename, {
       diarize,
       language,
+      minSpeakers,
+      maxSpeakers,
     });
     const updatedSession = await updateSession(userId, session.id, {
       status: job.status === "queued" ? "pending" : "running",

@@ -46,6 +46,10 @@ export interface SttOptions {
   diarize?: boolean;
   /** BCP-47 language hint (e.g. "en-US"). Optional – service auto-detects when omitted. */
   language?: string;
+  /** Optional minimum number of speakers for diarization. */
+  minSpeakers?: number;
+  /** Optional maximum number of speakers for diarization. */
+  maxSpeakers?: number;
 }
 
 /** A single diarized segment returned by the STT service. */
@@ -200,6 +204,12 @@ export async function transcribe(
   if (options.language) {
     form.append("language", options.language);
   }
+  if (typeof options.minSpeakers === "number") {
+    form.append("min_speakers", String(options.minSpeakers));
+  }
+  if (typeof options.maxSpeakers === "number") {
+    form.append("max_speakers", String(options.maxSpeakers));
+  }
 
   const res = await fetch(`${baseUrl}/api/transcribe`, {
     method: "POST",
@@ -233,6 +243,8 @@ export async function transcribeFromSourceUrl(
       filename: safeFilename,
       diarize: options.diarize ?? false,
       language: options.language,
+      min_speakers: options.minSpeakers,
+      max_speakers: options.maxSpeakers,
     }),
   });
 
@@ -265,6 +277,12 @@ export async function submitTranscribeJob(
   }
   if (options.language) {
     form.append("language", options.language);
+  }
+  if (typeof options.minSpeakers === "number") {
+    form.append("min_speakers", String(options.minSpeakers));
+  }
+  if (typeof options.maxSpeakers === "number") {
+    form.append("max_speakers", String(options.maxSpeakers));
   }
 
   const res = await fetch(`${baseUrl}/api/transcribe-async`, {
@@ -299,6 +317,8 @@ export async function submitTranscribeFromSourceUrlJob(
       filename: safeFilename,
       diarize: options.diarize ?? false,
       language: options.language,
+      min_speakers: options.minSpeakers,
+      max_speakers: options.maxSpeakers,
     }),
   });
   if (!res.ok) {

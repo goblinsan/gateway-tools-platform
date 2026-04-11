@@ -231,6 +231,8 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [diarize, setDiarize] = useState(false);
   const [language, setLanguage] = useState("en");
+  const [minSpeakers, setMinSpeakers] = useState("");
+  const [maxSpeakers, setMaxSpeakers] = useState("");
   const [state, setState] = useState<SubmitState>({ status: "idle" });
   const [speakerAliases, setSpeakerAliases] = useState<Record<string, string>>({});
 
@@ -246,6 +248,24 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
     e.preventDefault();
     const file = fileRef.current?.files?.[0];
     if (!file) return;
+
+    const parsedMin = minSpeakers.trim() ? Number.parseInt(minSpeakers, 10) : undefined;
+    const parsedMax = maxSpeakers.trim() ? Number.parseInt(maxSpeakers, 10) : undefined;
+    if (
+      (parsedMin !== undefined && (!Number.isInteger(parsedMin) || parsedMin < 1)) ||
+      (parsedMax !== undefined && (!Number.isInteger(parsedMax) || parsedMax < 1))
+    ) {
+      setState({ status: "error", error: "Min and max speakers must be positive integers" });
+      return;
+    }
+    if (
+      parsedMin !== undefined &&
+      parsedMax !== undefined &&
+      parsedMin > parsedMax
+    ) {
+      setState({ status: "error", error: "Min speakers must be less than or equal to max speakers" });
+      return;
+    }
 
     setState({ status: "uploading" });
 
@@ -303,6 +323,8 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
           filename: target.filename,
           diarize,
           language: language || undefined,
+          minSpeakers: parsedMin,
+          maxSpeakers: parsedMax,
         }),
       });
       const jobJson = await parseJsonSafely<JobResponse>(jobRes);
@@ -502,6 +524,47 @@ export function SttForm({ onComplete }: { onComplete?: () => void }) {
               Enable speaker diarization
             </label>
           </div>
+
+          {diarize && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label
+                  htmlFor="stt-min-speakers"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Min speakers
+                </label>
+                <input
+                  id="stt-min-speakers"
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  value={minSpeakers}
+                  onChange={(e) => setMinSpeakers(e.target.value)}
+                  placeholder="Auto"
+                  className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="stt-max-speakers"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Max speakers
+                </label>
+                <input
+                  id="stt-max-speakers"
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  value={maxSpeakers}
+                  onChange={(e) => setMaxSpeakers(e.target.value)}
+                  placeholder="Auto"
+                  className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder-zinc-500"
+                />
+              </div>
+            </div>
+          )}
 
           <div>
             <label
